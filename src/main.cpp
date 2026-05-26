@@ -112,18 +112,21 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
         }
     }
 
-    float threshold = 0.01, error = threshold + 1.0f;
+    // gradient descent
+    float threshold = 0.01, error = threshold + 1.0f, last_error = error + 1;
     float learning_rate = 0.3;
     int iter = 0;
-    while(error > threshold && iter < 1000) {
+    while(error > threshold && abs(last_error - error) > 1e-6) {
+        last_error = error;
         error = 0.0f;
         for(int i = 0; i < N; i++) {
             for(int j = 0; j < N; j++) {
                 if(i == j)  continue;
 
                 float new_distance = 0;
-
-                for(int k = 0; k < 2; k++) { // d_ij
+                
+                // 算new distance (d_ij)
+                for(int k = 0; k < 2; k++) { 
                     new_distance += pow(points[i][k] - points[j][k], 2);
                 }
                 new_distance = sqrt(new_distance);
@@ -138,14 +141,16 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
                     points[j][k] -= delta[k];
                 }
 
+                // 累計error
                 error += pow(distance_matrix[i][j] - new_distance, 2) / new_distance;
             }
         }
         error /= sum_distance;
-        learning_rate *= 0.9;
+        learning_rate *= 0.95;
         iter++;
     }
-    cout<<iter<<endl;
+    cout<<"iteration: "<<iter<<endl;
+
     for(int i = 0; i < N; i++) {
         if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 1)
             vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
