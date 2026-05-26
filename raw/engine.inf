@@ -1,0 +1,5 @@
+raw-file=engine.raw
+resolution=149x208x110
+sample-type=unsigned char
+voxel-size=1.000000:1.000000:1.000000
+endian=little

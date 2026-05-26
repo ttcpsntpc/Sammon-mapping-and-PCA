@@ -1,0 +1,12 @@
+raw-file=vase01.raw
+resolution=201x201x386
+sample-type=unsigned char
+voxel-size=0.020000:0.020000:0.020000
+endian=little
+Min=-2.000000:-2.000000:-0.200000
+Max=2.000000:2.000000:7.500000
+AIR=0
+SKIN6=255
+SKIN18=254
+SKIN26=253
+MODEL=252
