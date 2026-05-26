@@ -5,15 +5,15 @@ std::vector<std::vector<Vertex_c>> vertices;
 
 void Vertex_c::CreateVertices()
 {
-    std::vector<Vertex_c> square_2d_red = {
-        Vertex_c{{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}},
-        Vertex_c{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}},
-        Vertex_c{{0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}},
-        Vertex_c{{0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}},
-        Vertex_c{{1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}},
-        Vertex_c{{1.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {}, {}}
+    std::vector<Vertex_c> square_2d_white = {
+        Vertex_c{{0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}},
+        Vertex_c{{1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}},
+        Vertex_c{{0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}},
+        Vertex_c{{0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}},
+        Vertex_c{{1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}},
+        Vertex_c{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {}, {}}
     };
-    vertices.push_back(square_2d_red); // 0
+    vertices.push_back(square_2d_white); // 0
     
     std::vector<Vertex_c> square_2d_blue = {
         Vertex_c{{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.8f}, {}, {}},

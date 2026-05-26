@@ -24,6 +24,7 @@ enum IndianType
 class ReadFile_c
 {
 private:
+    bool ReadDatFile(const char *dat_filename);
     bool ReadVecFile(const char *vec_filename);
     bool ReadInfFile(const char *inf_filename);
     bool ReadRawFile(const char *raw_filename);
@@ -35,6 +36,11 @@ public:
     ReadFile_c(const char *filename);
     ~ReadFile_c();
 
+    struct DatData {
+        int num;
+        int dimension;
+        vector<float> data;
+    } dat_file;
     struct VecData {
         int resolution[2];
         vector<glm::vec2> data;
@@ -75,8 +81,8 @@ public:
 
 ReadFile_c::ReadFile_c(const char *filename)
 {
-    string vec_filename = string(filename) + ".vec";
-    ReadVecFile(vec_filename.c_str());
+    string vec_filename = string(filename) + ".dat";
+    ReadDatFile(vec_filename.c_str());
     // string inf_filename = string(filename) + ".inf";
     // string raw_filename = string(filename) + ".raw";
     // ReadInfFile(inf_filename.c_str());
@@ -96,6 +102,49 @@ void ReadFile_c::readFile(const char *filename) {
     // ReadInfFile(inf_filename.c_str());
     // ReadRawFile(raw_filename.c_str());
     //ReadTxtFile(txt_filename);
+}
+
+bool ReadFile_c::ReadDatFile(const char *dat_filename) 
+{
+    ifstream ifs(dat_filename, ios::in);
+    if(ifs.fail())
+    {
+        cout<< "Failed to open dat file." << '\n';
+        return false;
+    }
+
+    string line, token;
+
+    // 讀取第一行 (num, dimension)
+    if(getline(ifs, line)) {
+        stringstream ss(line);
+
+        getline(ss, token, ',');
+        dat_file.num = stoi(token);
+
+        getline(ss, token);
+        dat_file.dimension = stoi(token);
+    } else {
+        return false;
+    }
+    
+    //讀取剩下資料
+    dat_file.data.clear();
+    dat_file.data.resize(dat_file.num * dat_file.dimension);
+    int index = 0;
+    while(getline(ifs, line)) {
+        stringstream ss(line);
+        
+        while(getline(ss, token, ',')) {
+            if(index < dat_file.num * dat_file.dimension) {
+                dat_file.data[index] = stof(token);
+            }
+            index++;
+        }
+    }
+
+    ifs.close();
+    return true;
 }
 
 bool ReadFile_c::ReadVecFile(const char *vec_filename)

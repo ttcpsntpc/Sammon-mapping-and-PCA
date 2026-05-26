@@ -40,17 +40,123 @@ int Create3DVoxelTexture();
 const unsigned int SCR_WIDTH = 1000;
 const unsigned int SCR_HEIGHT = 750;
 
+const int DOMAIN_WIDTH = 128; // 白色背景大小
+const int DOMAIN_HEIGHT = 128;
+const int DOMAIN_START_X = 20; // 白色背景offset
+const int DOMAIN_START_Y = 20;
+
 // Camera
 Camera_c camera(glm::vec3(50.0f, 50.0f, 200.0f));
 glm::vec3 lightPos(500.0f, 500.0f, 500.0f);
 bool moveObject = 0; // 在移動光源或是相機
+bool isDataRefreshing = 0;
 
 // timing
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-ReadFile_c rf("../../raw/");
+ReadFile_c rf("../../creditcard");
 UIManager UI;
+
+int N = 100;
+vector<float> randomSelete(int N) {
+    vector<float> input_data(N * rf.dat_file.dimension);
+    
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<int> distrib(0, rf.dat_file.num - 1);
+
+    vector<int> gen_number; // 紀錄隨機生成的編號
+    int count = 0;
+    while(gen_number.size() < N) {
+        int temp = distrib(gen);
+
+        if(find(gen_number.begin(), gen_number.end(), temp) == gen_number.end()) {
+            gen_number.push_back(temp);
+            for(int i = 0; i < rf.dat_file.dimension; i++) {
+                input_data[count++] = rf.dat_file.data[temp * rf.dat_file.dimension + i];
+            }
+        }
+    }
+    return input_data;
+}
+
+vector<Vertex_c> sammonMapping(vector<float> input_data) {
+    vector<Vertex_c> vertex;
+
+    // preprocessing (d'_ij)
+    float sum_distance = 0;
+    vector<vector<float>> distance_matrix(N, vector<float>(N)); // 算第i筆跟第j筆資料的距離
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < N; j++) {
+            if(i == j) continue;
+
+            float distance = 0;
+            for(int k = 0; k < rf.dat_file.dimension - 1; k++) {
+                distance += pow(input_data[i * rf.dat_file.dimension + k] - input_data[j * rf.dat_file.dimension + k], 2);
+            }
+            distance = sqrt(distance);
+            distance_matrix[i][j] = distance;
+            sum_distance += distance;
+        }
+    }
+
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<float> distrib(0, 1);
+    
+    vector<vector<float>> points(N, vector<float>(2)); // random給mapping後的初始位置
+    for(int i = 0; i < N; i++) {
+        for(int j = 0; j < 2; j++){
+            points[i][j] = distrib(gen);
+        }
+    }
+
+    float threshold = 0.01, error = threshold + 1.0f;
+    float learning_rate = 0.3;
+    int iter = 0;
+    while(error > threshold && iter < 1000) {
+        error = 0.0f;
+        for(int i = 0; i < N; i++) {
+            for(int j = 0; j < N; j++) {
+                if(i == j)  continue;
+
+                float new_distance = 0;
+
+                for(int k = 0; k < 2; k++) { // d_ij
+                    new_distance += pow(points[i][k] - points[j][k], 2);
+                }
+                new_distance = sqrt(new_distance);
+                if(new_distance < 0.0001) new_distance = 0.0001;
+
+                // updata position
+                float delta[2];
+                for(int k = 0; k < 2; k++) {
+                    delta[k] = learning_rate * (distance_matrix[i][j] - new_distance) / new_distance * (points[i][k] - points[j][k]);
+
+                    points[i][k] += delta[k];
+                    points[j][k] -= delta[k];
+                }
+
+                error += pow(distance_matrix[i][j] - new_distance, 2) / new_distance;
+            }
+        }
+        error /= sum_distance;
+        learning_rate *= 0.9;
+        iter++;
+    }
+    cout<<iter<<endl;
+    for(int i = 0; i < N; i++) {
+        if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 1)
+            vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
+        else
+            vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {0.0f, 0.0f, 1.0f}, {}, {}});
+    }
+
+    return vertex;
+}
+
+
 
 int main()
 {
@@ -107,8 +213,8 @@ int main()
     Shader_c light_shader("shader/light_shader.vs", "shader/light_shader.fs");
 
     vertex.CreateVertices();
-    Object_c square_red;
-    square_red.CreateObject(vertices[0], {});
+    Object_c square_white;
+    square_white.CreateObject(vertices[0], {});
     Object_c square_blue;
     square_blue.CreateObject(vertices[1], {});
     Object_c cube;
@@ -119,7 +225,11 @@ int main()
     light_cube.CreateObject(vertices[4], {});
     
     UI.init();
-
+    
+    vector<float> input_data = randomSelete(N);
+    vector<Vertex_c> data_points = sammonMapping(input_data); 
+    Object_c sammon_points;
+    sammon_points.CreateObject(data_points, {});
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -144,6 +254,12 @@ int main()
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
 
+        if(isDataRefreshing) {
+            input_data = randomSelete(N);
+            data_points = sammonMapping(input_data); 
+            sammon_points.RenewObject(data_points);
+            isDataRefreshing = false;
+        }
         // create model matrix
         glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
         // create view matrix
@@ -175,6 +291,21 @@ int main()
         light_shader.setMat4("view", view);
         light_shader.setMat4("projection", projection);
         
+        // draw the white background
+        glBindVertexArray(square_white.VAO_);
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(DOMAIN_START_X, DOMAIN_START_Y, 0.0f));
+        model = glm::scale(model, glm::vec3(DOMAIN_WIDTH, DOMAIN_HEIGHT, 1.0f));
+        light_shader.setMat4("model", model);
+        glDrawArrays(GL_TRIANGLES, 0, square_white.size);
+
+        // draw the sammon mapping results
+        glBindVertexArray(sammon_points.VAO_);
+        model = glm::mat4(1.0f);
+        light_shader.setMat4("model", model);
+        glPointSize(5.0f);
+        glDrawArrays(GL_POINTS, 0, sammon_points.size);
+
         // draw the light
         glBindVertexArray(light_cube.VAO_);
         model = glm::mat4(1.0f);
@@ -211,6 +342,9 @@ int main()
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
         moveObject = !moveObject;
+    }
+    if(key == GLFW_KEY_F && action == GLFW_PRESS) {
+        isDataRefreshing = !isDataRefreshing;
     }
 }
 
