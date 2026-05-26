@@ -88,9 +88,7 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     float sum_distance = 0;
     vector<vector<float>> distance_matrix(N, vector<float>(N)); // 算第i筆跟第j筆資料的距離
     for(int i = 0; i < N; i++) {
-        for(int j = 0; j < N; j++) {
-            if(i == j) continue;
-
+        for(int j = 0; j < N, j != i; j++) {
             float distance = 0;
             for(int k = 0; k < rf.dat_file.dimension - 1; k++) {
                 distance += pow(input_data[i * rf.dat_file.dimension + k] - input_data[j * rf.dat_file.dimension + k], 2);
@@ -116,12 +114,12 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     float threshold = 0.01, error = threshold + 1.0f, last_error = error + 1;
     float learning_rate = 0.3;
     int iter = 0;
+    float min[2], max[2];
     while(error > threshold && abs(last_error - error) > 1e-6) {
         last_error = error;
         error = 0.0f;
         for(int i = 0; i < N; i++) {
-            for(int j = 0; j < N; j++) {
-                if(i == j)  continue;
+            for(int j = 0; j < N, j != i; j++) {
 
                 float new_distance = 0;
                 
@@ -139,6 +137,11 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
 
                     points[i][k] += delta[k];
                     points[j][k] -= delta[k];
+
+                    if(points[i][k] < min[k]) min[k] = points[i][k];
+                    if(points[j][k] < min[k]) min[k] = points[j][k];
+                    if(points[i][k] > max[k]) max[k] = points[i][k];
+                    if(points[j][k] > max[k]) max[k] = points[j][k];
                 }
 
                 // 累計error
@@ -152,6 +155,9 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     cout<<"iteration: "<<iter<<endl;
 
     for(int i = 0; i < N; i++) {
+        points[i][0] = (points[i][0] - min[0]) / (max[0] - min[0]);
+        points[i][1] = (points[i][1] - min[1]) / (max[1] - min[1]);
+
         if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 1)
             vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
         else
