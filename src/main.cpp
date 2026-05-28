@@ -85,19 +85,27 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     vector<Vertex_c> vertex;
 
     // preprocessing (d'_ij)
+    int zero_count = 0;
     float sum_distance = 0;
-    vector<vector<float>> distance_matrix(N, vector<float>(N)); // 算第i筆跟第j筆資料的距離
+    vector<vector<float>> origin_distance(N, vector<float>(N)); // 算第i筆跟第j筆資料的距離
     for(int i = 0; i < N; i++) {
         for(int j = 0; j < N, j != i; j++) {
             float distance = 0;
-            for(int k = 0; k < rf.dat_file.dimension - 1; k++) {
+            for(int k = 0; k < rf.dat_file.dimension - 1; k++) { // 2-norm
                 distance += pow(input_data[i * rf.dat_file.dimension + k] - input_data[j * rf.dat_file.dimension + k], 2);
             }
             distance = sqrt(distance);
-            distance_matrix[i][j] = distance;
+            if(distance == 0) {
+                zero_count++;
+                distance += 1e-6;
+            }
+            origin_distance[i][j] = distance;
             sum_distance += distance;
         }
     }
+
+    if(zero_count > 0) cout<<"original distance has "<<zero_count<<" zero distance\n";
+    zero_count = 0;
 
     random_device rd;
     mt19937 gen(rd());
@@ -111,11 +119,11 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     }
 
     // gradient descent
-    float threshold = 0.01, error = threshold + 1.0f, last_error = error + 1;
+    float threshold = 1000, error = threshold + 1.0f, last_error = error + 1;
     float learning_rate = 0.3;
     int iter = 0;
     float min[2], max[2];
-    while(error > threshold && abs(last_error - error) > 1e-6) {
+    while(iter < threshold && abs(last_error - error) / last_error > 1e-6) {
         last_error = error;
         error = 0.0f;
         for(int i = 0; i < N; i++) {
@@ -128,12 +136,15 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
                     new_distance += pow(points[i][k] - points[j][k], 2);
                 }
                 new_distance = sqrt(new_distance);
-                if(new_distance < 0.0001) new_distance = 0.0001;
+                if(new_distance < 1e-6) {
+                    new_distance = 1e-6;
+                    zero_count++;
+                }
 
                 // updata position
                 float delta[2];
                 for(int k = 0; k < 2; k++) {
-                    delta[k] = learning_rate * (distance_matrix[i][j] - new_distance) / new_distance * (points[i][k] - points[j][k]);
+                    delta[k] = learning_rate * (origin_distance[i][j] - new_distance) / new_distance * (points[i][k] - points[j][k]);
 
                     points[i][k] += delta[k];
                     points[j][k] -= delta[k];
@@ -145,7 +156,7 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
                 }
 
                 // 累計error
-                error += pow(distance_matrix[i][j] - new_distance, 2) / new_distance;
+                error += pow(origin_distance[i][j] - new_distance, 2) / origin_distance[i][j];
             }
         }
         error /= sum_distance;
@@ -153,6 +164,7 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
         iter++;
     }
     cout<<"iteration: "<<iter<<endl;
+    if(zero_count > 0) cout<<"in the iteration, new distance has "<<zero_count<<" zero distance\n";
 
     for(int i = 0; i < N; i++) {
         points[i][0] = (points[i][0] - min[0]) / (max[0] - min[0]);
