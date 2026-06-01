@@ -117,7 +117,7 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
             points[i][j] = distrib(gen);
         }
     }
-
+    
     // gradient descent
     float threshold = 1000, error = threshold + 1.0f, last_error = error + 1;
     float learning_rate = 0.3;
@@ -148,11 +148,6 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
 
                     points[i][k] += delta[k];
                     points[j][k] -= delta[k];
-
-                    if(points[i][k] < min[k]) min[k] = points[i][k];
-                    if(points[j][k] < min[k]) min[k] = points[j][k];
-                    if(points[i][k] > max[k]) max[k] = points[i][k];
-                    if(points[j][k] > max[k]) max[k] = points[j][k];
                 }
 
                 // 累計error
@@ -167,13 +162,20 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     if(zero_count > 0) cout<<"in the iteration, new distance has "<<zero_count<<" zero distance\n";
 
     for(int i = 0; i < N; i++) {
-        points[i][0] = (points[i][0] - min[0]) / (max[0] - min[0]);
-        points[i][1] = (points[i][1] - min[1]) / (max[1] - min[1]);
+        for(int k = 0; k < 2; k++) {
+            if(points[i][k] < min[k]) min[k] = points[i][k];
+            if(points[i][k] > max[k]) max[k] = points[i][k];
+        }
+    }
+    
+    for(int i = 0; i < N; i++) {
+        points[i][0] = (points[i][0] - min[0]) / (max[0] - min[0]) * 0.9 + 0.05;
+        points[i][1] = (points[i][1] - min[1]) / (max[1] - min[1]) * 0.9 + 0.05;
 
         if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 1)
-            vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
+            vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
         else
-            vertex.push_back(Vertex_c{{points[i][0] * DOMAIN_WIDTH + DOMAIN_START_X, points[i][1] * DOMAIN_HEIGHT + DOMAIN_START_Y, 1.0}, {0.0f, 0.0f, 1.0f}, {}, {}});
+            vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {0.0f, 0.0f, 1.0f}, {}, {}});
     }
 
     return vertex;
@@ -325,6 +327,8 @@ int main()
         // draw the sammon mapping results
         glBindVertexArray(sammon_points.VAO_);
         model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(DOMAIN_START_X, DOMAIN_START_Y, 0.0f));
+        model = glm::scale(model, glm::vec3(DOMAIN_WIDTH, DOMAIN_HEIGHT, 1.0f));
         light_shader.setMat4("model", model);
         glPointSize(5.0f);
         glDrawArrays(GL_POINTS, 0, sammon_points.size);

@@ -40,7 +40,9 @@ public:
         int num;
         int dimension;
         vector<float> data;
+        vector<float> max, min; // 大小 = dimension
     } dat_file;
+
     struct VecData {
         int resolution[2];
         vector<glm::vec2> data;
@@ -128,6 +130,11 @@ bool ReadFile_c::ReadDatFile(const char *dat_filename)
         return false;
     }
     
+    dat_file.max.resize(dat_file.dimension);
+    dat_file.min.resize(dat_file.dimension);
+    fill(dat_file.max.begin(), dat_file.max.end(), numeric_limits<float>::lowest());
+    fill(dat_file.min.begin(), dat_file.min.end(), numeric_limits<float>::max());
+    
     //讀取剩下資料
     dat_file.data.clear();
     dat_file.data.resize(dat_file.num * dat_file.dimension);
@@ -136,9 +143,20 @@ bool ReadFile_c::ReadDatFile(const char *dat_filename)
         stringstream ss(line);
         
         while(getline(ss, token, ',')) {
+            float data = stof(token);
+            int attri_idx = index % dat_file.dimension;
+
             if(index < dat_file.num * dat_file.dimension) {
-                dat_file.data[index] = stof(token);
+                dat_file.data[index] = data;
             }
+
+            if(data < dat_file.min[attri_idx]) {
+                dat_file.min[attri_idx] = data;
+            }
+            if(data > dat_file.max[attri_idx]) {
+                dat_file.max[attri_idx] = data;
+            }
+
             index++;
         }
     }
