@@ -119,11 +119,12 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
     }
     
     // gradient descent
-    float threshold = 1000, error = threshold + 1.0f, last_error = error + 1;
+    float max_iter = 1000, threshold = 1e-6, error = threshold + 1.0f, last_error = error + 1.0f;
     float learning_rate = 0.3;
     int iter = 0;
-    float min[2], max[2];
-    while(iter < threshold && abs(last_error - error) / last_error > 1e-6) {
+    float min[2] = {FLT_MAX, FLT_MAX}, max[2] = {-FLT_MAX, -FLT_MAX};
+    
+    while(iter < max_iter && abs(last_error - error) / last_error > threshold) {
         last_error = error;
         error = 0.0f;
         for(int i = 0; i < N; i++) {
@@ -167,7 +168,7 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
             if(points[i][k] > max[k]) max[k] = points[i][k];
         }
     }
-    
+
     for(int i = 0; i < N; i++) {
         points[i][0] = (points[i][0] - min[0]) / (max[0] - min[0]) * 0.9 + 0.05;
         points[i][1] = (points[i][1] - min[1]) / (max[1] - min[1]) * 0.9 + 0.05;
@@ -177,7 +178,6 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
         else
             vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {0.0f, 0.0f, 1.0f}, {}, {}});
     }
-
     return vertex;
 }
 
@@ -278,6 +278,9 @@ int main()
 
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
+        ImGui::Begin("sample points");
+        ImGui::InputInt("N", &N);
+        ImGui::End();
 
         if(isDataRefreshing) {
             input_data = randomSelete(N);
