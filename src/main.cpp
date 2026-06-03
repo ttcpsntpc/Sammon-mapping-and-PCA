@@ -55,12 +55,28 @@ bool isDataRefreshing = 0;
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-ReadFile_c rf("../../creditcard");
+ReadFile_c rf("../../Iris");
 UIManager UI;
 
+bool isAdd = false;
 int N = 100;
+
+// SOM parameters
+bool start = false;
+thread t1;
+int total_iteration_count = 200000;
+int iteration_count = 0;
+int resolution = 5;
+double original_radius = resolution / 2.0, original_learning_rate = 0.005; // 鄰域半徑和學習率
+double neighbor_radius = original_radius, learning_rate = original_learning_rate;
+// 一個resolution * resolution大小的vector，裡面每個元素都是大小為dimension的vector<float>，代表該點的weight
+vector<vector<vector<float>>> square_weight(resolution, vector<vector<float>>(resolution, vector<float>(rf.dat_file.dimension)));
+
 vector<float> randomSelete(int N) {
-    vector<float> input_data(N * rf.dat_file.dimension);
+    int N_node = 0;
+    if(isAdd == true) N_node = resolution * resolution;
+
+    vector<float> input_data((N + N_node) * rf.dat_file.dimension);
     
     random_device rd;
     mt19937 gen(rd());
@@ -78,11 +94,22 @@ vector<float> randomSelete(int N) {
             }
         }
     }
+    if(isAdd == true) {
+        for(int i = 0; i < resolution; i++) {
+            for(int j = 0; j < resolution; j++) {
+                for(int k = 0; k < rf.dat_file.dimension; k++) {
+                    input_data[count++] = square_weight[i][j][k];
+                }
+            }
+        }
+    }
     return input_data;
 }
 
-vector<Vertex_c> sammonMapping(vector<float> input_data) {
+vector<Vertex_c> sammonMapping(vector<float> input_data, int N) {
     vector<Vertex_c> vertex;
+
+    if(isAdd == true) N += resolution * resolution;
 
     // preprocessing (d'_ij)
     int zero_count = 0;
@@ -175,10 +202,127 @@ vector<Vertex_c> sammonMapping(vector<float> input_data) {
 
         if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 1)
             vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {1.0f, 0.0f, 0.0f}, {}, {}});
-        else
+        else if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 0)
             vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {0.0f, 0.0f, 1.0f}, {}, {}});
+        else if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 2)
+            vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {0.0f, 1.0f, 0.0f}, {}, {}});
+        else if(input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1] == 100)
+            vertex.push_back(Vertex_c{{points[i][0], points[i][1], 1.0}, {0.0f, 0.0f, 0.0f}, {}, {}});
+        else 
+            cout<<"wrong classification type: "<<input_data[i * rf.dat_file.dimension + rf.dat_file.dimension - 1]<<endl;
+
     }
     return vertex;
+}
+
+void initialSquareMeshWeight() {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<float> distrib(0, 1);
+
+    for(int i = 0; i < resolution; i++) {
+        for(int j = 0; j < resolution; j++) {
+            for(int k = 0; k < rf.dat_file.dimension - 1; k++) {
+                square_weight[i][j][k] = distrib(gen);
+            }
+            square_weight[i][j][rf.dat_file.dimension - 1] = 100; // 用第一百類代表用SOM算出的點
+        }
+    }
+}
+
+glm::ivec2 FindBMU(vector<float> input_vector) {
+    int k = 1;
+    float minimum_distance = std::numeric_limits<float>::max();
+    glm::ivec2 winner(0, 0);
+    for(int i = 0; i < resolution; ++i)
+    {
+        for(int j = 0; j < resolution; ++j)
+        {
+            float distance = 0;
+            
+            for(int k = 0; k < rf.dat_file.dimension - 1; k++) { // 2-norm
+                distance += pow(input_vector[i * rf.dat_file.dimension + k] - input_vector[k], 2);
+            }
+            if (distance < minimum_distance)
+            {
+                k = 1;
+                minimum_distance = distance;
+                winner.x = i;
+                winner.y = j;
+            }
+            else if (distance == minimum_distance)
+            {
+                k++;
+                // random number between 0 and 1
+                // !!! for c++ 11
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<> dis(0.0, 1.0);
+                double random_value = dis(gen);
+                if(random_value < 1.0 / k)
+                {
+                    winner.x = i;
+                    winner.y = j;
+                }
+            }
+        }
+    }
+    return winner;
+}
+
+double UpdateNeighbourhoodRadius(double original_radius, int iteration_count, int total_iteration_count) {
+    return original_radius * exp( (double)-iteration_count * log(original_radius) / (double)total_iteration_count );
+}
+
+double UpdateLearningRate(double original_learning_rate, int iteration_count, int total_iteration_count) {
+    return original_learning_rate * exp( -(double)iteration_count / (double)total_iteration_count );
+}
+
+double CalculateInfluence(glm::vec2 BMU, glm::vec2 now_point, int resolution, double neighbourhood_radius) {
+    double distance = (BMU.x - now_point.x) * (BMU.x - now_point.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
+    if (distance > neighbourhood_radius * neighbourhood_radius)
+        return 0.0f;
+    return exp(-(distance / (2 * neighbourhood_radius * neighbourhood_radius)));
+}
+
+void RunSOM() {
+     // 1. pick a random input vector
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<> dis(0, rf.dat_file.num - 1);
+    int random_index = dis(gen);    
+    vector<float> input_vector = vector<float>(rf.dat_file.data.begin() + random_index * rf.dat_file.dimension, rf.dat_file.data.begin() + (random_index + 1) * rf.dat_file.dimension);
+
+    // 2. find the best matching unit (BMU)
+    glm::ivec2 BMU = FindBMU(input_vector);
+    
+    // 3. update the radius and learning rate
+    neighbor_radius = UpdateNeighbourhoodRadius(original_radius, iteration_count, total_iteration_count);
+    learning_rate = UpdateLearningRate(original_learning_rate, iteration_count, total_iteration_count);
+    
+    for(int j = 0; j < resolution; ++j)
+    {
+        for(int k = 0; k < resolution; ++k)
+        {
+            glm::ivec2 now_point(j, k);
+            double influence = CalculateInfluence(BMU, now_point, resolution, neighbor_radius);
+            glm::ivec2 distance = BMU - now_point;
+            // if( influence != 0.0){
+            //     cout<<" cylinderical_mesh["<<j<<"]["<<k<<"] influence: "<<influence;
+            //     cout<<"  BMU: "<<BMU.x<<", "<<BMU.y<<endl;
+            // }
+            for(int l = 0; l < rf.dat_file.dimension - 1; l++) {
+                square_weight[j][k][l] += (float)influence * (float)learning_rate * (input_vector[l] - square_weight[j][k][l]);
+            }
+        }
+    }
+}
+
+void CreateThread() {
+    if(t1.joinable())
+        t1.join();
+
+    t1 = thread(RunSOM);
 }
 
 
@@ -251,10 +395,13 @@ int main()
     
     UI.init();
     
+    initialSquareMeshWeight();
+
     vector<float> input_data = randomSelete(N);
-    vector<Vertex_c> data_points = sammonMapping(input_data); 
+    vector<Vertex_c> data_points = sammonMapping(input_data, N); 
     Object_c sammon_points;
     sammon_points.CreateObject(data_points, {});
+    
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -278,16 +425,47 @@ int main()
 
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
-        ImGui::Begin("sample points");
+        ImGui::Begin("Multi-Dimension Data");
+        if(ImGui::InputInt("Resolution", &resolution)) {
+            isAdd = false;
+            start = false;
+            original_radius = resolution / 2.0; 
+            neighbor_radius = original_radius;
+            original_learning_rate = 0.005;
+            learning_rate = original_learning_rate;
+            iteration_count = 0;
+            square_weight.clear();
+            square_weight.resize(resolution, vector<vector<float>>(resolution, vector<float>(rf.dat_file.dimension)));
+            initialSquareMeshWeight();
+        }
+        if (ImGui::Button("Run SOM")) {
+            start = true;
+            CreateThread();
+        }
+        ImGui::SameLine();
+        ImGui::Text("i: %d", iteration_count);
+        ImGui::Text("radius: %f", neighbor_radius);
+        ImGui::Text("learning: %f", learning_rate);
+        if (ImGui::Button("add SOM nodes to sammon mapping")) {
+            isAdd = true;
+        }
         ImGui::InputInt("N", &N);
         ImGui::End();
 
+        if (start && iteration_count < total_iteration_count) {
+            for(int i = 0; i < 100; ++i) {
+                RunSOM();
+                iteration_count++;
+            }
+        }
+
         if(isDataRefreshing) {
             input_data = randomSelete(N);
-            data_points = sammonMapping(input_data); 
+            data_points = sammonMapping(input_data, N); 
             sammon_points.RenewObject(data_points);
             isDataRefreshing = false;
         }
+
         // create model matrix
         glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
         // create view matrix
